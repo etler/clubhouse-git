@@ -10,6 +10,7 @@
     "@oclif/command": "^1",
     "@oclif/config": "^1",
     "@oclif/plugin-help": "^2",
+    "clubhouse-lib": "^0.10.0",
     "tslib": "^1"
   },
   "devDependencies": {
