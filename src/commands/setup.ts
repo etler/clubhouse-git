@@ -60,6 +60,13 @@ export default class Setup extends Command {
         name: 'customBranchFormat',
         message: 'Custom branch format:',
         type: 'input',
+        validate: (input) => {
+          if (input.includes('[story_id]')) {
+            return true
+          } else {
+            return 'Custom branch format must include [story_id]'
+          }
+        }
       }])
       config.set({branchFormat: customBranchFormat})
       return customBranchFormat
