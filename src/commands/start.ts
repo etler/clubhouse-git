@@ -10,7 +10,7 @@ const branchFormat: string = config.get('branchFormat')
 const mentionName: string = config.get('mentionName')
 const client = Clubhouse.create(token)
 
-type StoryOptions = {all: boolean, owned: boolean, unowned: boolean, iteration: boolean}
+type StoryOptions = {all: boolean, owned: boolean, unowned: boolean, iteration: boolean, search: string | undefined}
 
 export default class Start extends Command {
   static description = 'Create a git branch from a list of stories'
@@ -25,6 +25,7 @@ export default class Start extends Command {
 
   static flags = {
     help: flags.help({char: 'h'}),
+    search: flags.string({char: 's'}),
     all: flags.boolean({char: 'a'}),
     owned: flags.boolean({char: 'o'}),
     unowned: flags.boolean({char: 'u'}),
@@ -97,9 +98,9 @@ export default class Start extends Command {
     console.log(stdoutPush, stderrPush)
   }
 
-  async getStories(owner: string, {all, owned, unowned, iteration}: StoryOptions) {
+  async getStories(owner: string, {all, owned, unowned, iteration, search}: StoryOptions) {
     // Set default values
-    if ((all ?? owned ?? unowned ?? iteration) === undefined) {
+    if ((all ?? owned ?? unowned ?? iteration ?? search) === undefined) {
       owned = true
       unowned = false
       iteration = true
@@ -107,6 +108,9 @@ export default class Start extends Command {
       owned = owned ?? true
       unowned = unowned ?? true
       iteration = iteration ?? false
+    } else if (iteration === true && (owned ?? unowned) === undefined) {
+      owned = owned ?? true
+      unowned = unowned ?? true
     }
     owned = owned ?? false
     unowned = unowned ?? false
@@ -115,12 +119,25 @@ export default class Start extends Command {
     const iterationsPromise = iteration === true ? client.listIterations() : undefined
     const ownedStorySearchPromise = owned ? client.searchStories(`is:unstarted owner:${owner}`) : undefined
     const unownedStorySearchPromise = unowned ? client.searchStories(`is:unstarted !has:owner`) : undefined
-    const [iterations, ownedStorySearch, unownedStorySearch] =
-      await Promise.all([iterationsPromise, ownedStorySearchPromise, unownedStorySearchPromise])
+    const customStorySearchPromise = search ? client.searchStories(`is:unstarted ${search}`) : undefined
+    const [iterations, ownedStorySearch, unownedStorySearch, customStorySearch] =
+      await Promise.all(
+        [iterationsPromise, ownedStorySearchPromise, unownedStorySearchPromise, customStorySearchPromise]
+      )
 
     const ownedStories = ownedStorySearch?.data ?? []
     const unownedStories = unownedStorySearch?.data ?? []
-    const stories = [...ownedStories, ...unownedStories]
+    const customStories = customStorySearch?.data ?? []
+    const stories = (() => {
+      if (customStories.length && (ownedStories.length || unownedStories.length)) {
+        const customStoryIds = customStories.map(({id}) => id)
+        return [...ownedStories, ...unownedStories].filter(({id}) => customStoryIds.includes(id))
+      } else if (customStories.length) {
+        return customStories
+      } else {
+        return [...ownedStories, ...unownedStories]
+      }
+    })()
     const currentIterationsIds = iterations?.filter(
       (iteration) => iteration.status === 'started').map(({id}) => id
     )
